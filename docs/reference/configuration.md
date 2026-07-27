@@ -59,6 +59,7 @@ server deployment. Treat the rest as tuning you reach for when you have a reason
 | [`MEMINI_LLM_API_KEY`](#memini_llm_api_key) | none | [LLM (optional)](#llm-optional) |
 | [`MEMINI_LLM_MODEL`](#memini_llm_model) | `gpt-4o-mini` | [LLM (optional)](#llm-optional) |
 | [`MEMINI_LLM_API`](#memini_llm_api) | `openai` | [LLM (optional)](#llm-optional) |
+| [`MEMINI_LLM_DISABLE_THINKING`](#memini_llm_disable_thinking) | none | [LLM (optional)](#llm-optional) |
 | [`MEMINI_RERANK`](#memini_rerank) | `off` | [Reranking](#reranking) |
 | [`MEMINI_RERANK_MODEL`](#memini_rerank_model) | none | [Reranking](#reranking) |
 | [`MEMINI_RERANK_API_KEY`](#memini_rerank_api_key) | none | [Reranking](#reranking) |
@@ -331,6 +332,12 @@ string, default `gpt-4o-mini`. Set by `Config.LLMModel`.
 string, default `openai`. Set by `Config.LLMAPI`.
 
 `MEMINI_LLM_API` selects the chat backend: "openai" (default) or "anthropic".
+
+### `MEMINI_LLM_DISABLE_THINKING`
+
+string, default none. Set by `Config.LLMDisableThinking`.
+
+`MEMINI_LLM_DISABLE_THINKING` selects how to suppress a reasoning model's thinking pass. The right value is gateway/model-specific: "reasoning_effort" sets OpenAI reasoning_effort="none" (gpt-5/o-series); "thinking" sends a disabled thinking config (Anthropic and compatible gateways, and OpenAI- compatible gateways that only honor the thinking field, e.g. opencode Zen serving deepseek-v4-flash). Empty/"off" sends no toggle. It applies to every chat call: consolidation, distillation, answering, the memory_answer MCP tool, and LLM reranking. "reasoning_effort" is rejected at boot when MEMINI_LLM_API=anthropic (that backend has no equivalent field). Useful for a reasoning model whose chain-of-thought latency or token cost is not worth it for short structured tasks; a no-op on a non-reasoning model. See internal/llm DisableThinking strategies.
 
 ## Reranking
 

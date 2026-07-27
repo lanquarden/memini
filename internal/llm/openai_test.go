@@ -309,3 +309,99 @@ func TestOpenAIChatToolsRejectsEmptyReply(t *testing.T) {
 		t.Errorf("error should mention the empty response, got %v", err)
 	}
 }
+
+// captureChatBody spins a /chat/completions echo server that records the JSON
+// request body, runs fn against a client built from cfg, and returns the body.
+func captureChatBody(t *testing.T, cfg llm.OpenAIConfig, fn func(c *llm.OpenAIClient)) map[string]any {
+	t.Helper()
+	var gotBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(raw, &gotBody)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"ok"}}]}`))
+	}))
+	defer srv.Close()
+
+	cfg.BaseURL = srv.URL
+	if cfg.Model == "" {
+		cfg.Model = "m"
+	}
+	c, err := llm.NewOpenAI(cfg)
+	if err != nil {
+		t.Fatalf("NewOpenAI: %v", err)
+	}
+	fn(c)
+	if gotBody == nil {
+		t.Fatal("no request body captured")
+	}
+	return gotBody
+}
+
+func TestOpenAIDisableThinkingReasoningEffort(t *testing.T) {
+	body := captureChatBody(t, llm.OpenAIConfig{DisableThinking: llm.DisableThinkingReasoningEffort}, func(c *llm.OpenAIClient) {
+		if _, err := c.Complete(context.Background(), "sys", "user"); err != nil {
+			t.Fatalf("Complete: %v", err)
+		}
+	})
+	if got := body["reasoning_effort"]; got != "none" {
+		t.Errorf("reasoning_effort = %v, want %q", got, "none")
+	}
+	if _, ok := body["thinking"]; ok {
+		t.Errorf("thinking field present with reasoning_effort strategy, want absent")
+	}
+}
+
+func TestOpenAIDisableThinkingThinkingInjectsBodyField(t *testing.T) {
+	body := captureChatBody(t, llm.OpenAIConfig{DisableThinking: llm.DisableThinkingThinking}, func(c *llm.OpenAIClient) {
+		if _, err := c.Complete(context.Background(), "sys", "user"); err != nil {
+			t.Fatalf("Complete: %v", err)
+		}
+	})
+	thinking, _ := body["thinking"].(map[string]any)
+	if thinking == nil || thinking["type"] != "disabled" {
+		t.Errorf("thinking = %v, want {type:disabled}", body["thinking"])
+	}
+	if _, ok := body["reasoning_effort"]; ok {
+		t.Errorf("reasoning_effort present with thinking strategy, want absent")
+	}
+}
+
+func TestOpenAIDefaultOmitsReasoningAndThinking(t *testing.T) {
+	body := captureChatBody(t, llm.OpenAIConfig{}, func(c *llm.OpenAIClient) {
+		if _, err := c.Complete(context.Background(), "sys", "user"); err != nil {
+			t.Fatalf("Complete: %v", err)
+		}
+	})
+	if _, ok := body["reasoning_effort"]; ok {
+		t.Errorf("reasoning_effort = %v, want absent for a default client", body["reasoning_effort"])
+	}
+	if _, ok := body["thinking"]; ok {
+		t.Errorf("thinking = %v, want absent for a default client", body["thinking"])
+	}
+}
+
+func TestOpenAIChatToolsDisableThinkingReasoningEffort(t *testing.T) {
+	body := captureChatBody(t, llm.OpenAIConfig{DisableThinking: llm.DisableThinkingReasoningEffort}, func(c *llm.OpenAIClient) {
+		if _, err := c.ChatTools(context.Background(), "sys",
+			[]llm.ChatTurn{{Role: llm.RoleUser, Text: "go"}}, nil, llm.ToolAuto); err != nil {
+			t.Fatalf("ChatTools: %v", err)
+		}
+	})
+	if got := body["reasoning_effort"]; got != "none" {
+		t.Errorf("reasoning_effort = %v, want %q", got, "none")
+	}
+}
+
+func TestOpenAIChatToolsDisableThinkingThinking(t *testing.T) {
+	body := captureChatBody(t, llm.OpenAIConfig{DisableThinking: llm.DisableThinkingThinking}, func(c *llm.OpenAIClient) {
+		if _, err := c.ChatTools(context.Background(), "sys",
+			[]llm.ChatTurn{{Role: llm.RoleUser, Text: "go"}}, nil, llm.ToolAuto); err != nil {
+			t.Fatalf("ChatTools: %v", err)
+		}
+	})
+	thinking, _ := body["thinking"].(map[string]any)
+	if thinking == nil || thinking["type"] != "disabled" {
+		t.Errorf("thinking = %v, want {type:disabled}", body["thinking"])
+	}
+}

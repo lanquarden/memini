@@ -281,6 +281,7 @@ func buildServiceStack(
 	if cfg.LLMEnabled() {
 		client, err := llm.New(llm.API(cfg.LLMAPI), llm.Config{
 			BaseURL: cfg.LLMBaseURL, APIKey: cfg.LLMAPIKey, Model: cfg.LLMModel,
+			DisableThinking: llm.DisableThinking(cfg.LLMDisableThinking),
 		})
 		if err != nil {
 			_ = st.Close()
@@ -294,7 +295,8 @@ func buildServiceStack(
 		svcOpts = append(svcOpts, service.WithConsolidator(chatClient), service.WithAnswerer(chatClient),
 			service.WithDistiller(chatClient))
 		log.Info("LLM consolidation + answering enabled",
-			"api", cfg.LLMAPI, "model", cfg.LLMModel, "mode", cfg.ConsolidateMode)
+			"api", cfg.LLMAPI, "model", cfg.LLMModel, "mode", cfg.ConsolidateMode,
+			"disable_thinking", cfg.LLMDisableThinking)
 	}
 	// Promotion self-selects its engine: the LLM distiller when configured, the
 	// marker extractor otherwise. Wired outside the LLM block so LLM-less
