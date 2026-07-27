@@ -336,6 +336,19 @@ type Config struct {
 	// use a deployment-specific value when multiple memini instances share one
 	// OpenCode account.
 	LLMOpenCodeSession string `env:"MEMINI_LLM_OPENCODE_SESSION" envDefault:"memini"`
+	// LLMDisableThinking selects how to suppress a reasoning model's thinking
+	// pass. The right value is gateway/model-specific: "reasoning_effort" sets
+	// OpenAI reasoning_effort="none" (gpt-5/o-series); "thinking" sends a
+	// disabled thinking config (Anthropic and compatible gateways, and OpenAI-
+	// compatible gateways that only honor the thinking field, e.g. opencode Zen
+	// serving deepseek-v4-flash). Empty/"off" sends no toggle. It applies to
+	// every chat call: consolidation, distillation, answering, the
+	// memory_answer MCP tool, and LLM reranking. "reasoning_effort" is rejected
+	// at boot when MEMINI_LLM_API=anthropic (that backend has no equivalent
+	// field). Useful for a reasoning model whose chain-of-thought latency or
+	// token cost is not worth it for short structured tasks; a no-op on a
+	// non-reasoning model. See internal/llm DisableThinking strategies.
+	LLMDisableThinking string `env:"MEMINI_LLM_DISABLE_THINKING"`
 	// LLMMaxTokens caps the completion length of every chat call. 0 (the
 	// default) keeps the client's built-in budget (4096). Reasoning models
 	// that spend thousands of hidden thinking tokens inside the budget need
@@ -1085,6 +1098,26 @@ func (c *Config) validateChunking() error {
 	return nil
 }
 
+// validateThinkingSuppression checks the reasoning/thinking suppression
+// selector and the one backend combination it cannot honor.
+// MEMINI_LLM_DISABLE_THINKING is gateway/model-specific, so unknown values are
+// rejected at boot. The accepted set mirrors the llm.DisableThinking
+// strategies; keeping a local copy rather than importing llm leaves config a
+// leaf, at the cost of updating both when a strategy is added (the docs gate
+// would not catch this drift on its own).
+func (c *Config) validateThinkingSuppression() error {
+	switch c.LLMDisableThinking {
+	case "", "off", "reasoning_effort", "thinking":
+	default:
+		return fmt.Errorf("unknown MEMINI_LLM_DISABLE_THINKING %q (want off|reasoning_effort|thinking)", c.LLMDisableThinking)
+	}
+	if c.LLMDisableThinking == "reasoning_effort" && c.LLMAPI == "anthropic" {
+		return fmt.Errorf("MEMINI_LLM_DISABLE_THINKING=reasoning_effort is not supported on " +
+			"MEMINI_LLM_API=anthropic (that backend has no reasoning_effort field; use thinking)")
+	}
+	return nil
+}
+
 // validateRecallScores checks the recall-path score floors and ranking weights.
 // The fused floor and the salience blend weight are [0,1] range checks; the
 // rerank gate additionally requires an enabled cross-encoder. Other settings
@@ -1120,6 +1153,9 @@ func (c *Config) validateRecallScores() error {
 }
 
 func (c *Config) validateLLM() error {
+	if err := c.validateThinkingSuppression(); err != nil {
+		return err
+	}
 	if c.LLMMaxTokens < 0 {
 		return fmt.Errorf("MEMINI_LLM_MAX_TOKENS must be >= 0, got %d", c.LLMMaxTokens)
 	}

@@ -12,13 +12,32 @@ import (
 	"github.com/openai/openai-go/v3/shared"
 )
 
+// applyDisableThinking configures reasoning/thinking suppression for an
+// OpenAI chat request and returns extra call-time options to pass to the
+// Chat.Completions.New call. reasoning_effort is set on the SDK params;
+// thinking is injected as a top-level body field via option.WithJSONSet (the
+// openai-go params have no such field, so it only reaches gateways that route
+// the Anthropic-style thinking field on an OpenAI body, e.g. opencode Zen).
+func applyDisableThinking(mode DisableThinking, params *openai.ChatCompletionNewParams) []option.RequestOption {
+	switch mode {
+	case DisableThinkingReasoningEffort:
+		params.ReasoningEffort = shared.ReasoningEffortNone
+	case DisableThinkingThinking:
+		// sjson dotted path sets {"thinking":{"type":"disabled"}}; avoids reaching for
+		// the openai-go params (which have no thinking field on a chat completion).
+		return []option.RequestOption{option.WithJSONSet("thinking.type", "disabled")}
+	}
+	return nil
+}
+
 // OpenAIClient is a Client backed by an OpenAI-compatible /chat/completions
 // endpoint.
 type OpenAIClient struct {
-	client    openai.Client
-	model     string
-	maxTokens int64
-	extra     []option.RequestOption
+	client          openai.Client
+	model           string
+	maxTokens       int64
+	disableThinking DisableThinking
+	extra           []option.RequestOption
 }
 
 // NewOpenAI builds a chat client. BaseURL and Model are required.
@@ -41,10 +60,11 @@ func NewOpenAI(cfg Config) (*OpenAIClient, error) {
 		extra = append(extra, option.WithJSONSet(key, raw))
 	}
 	return &OpenAIClient{
-		client:    openai.NewClient(opts...),
-		model:     cfg.Model,
-		maxTokens: maxTokensOr(cfg.MaxTokens),
-		extra:     extra,
+		client:          openai.NewClient(opts...),
+		model:           cfg.Model,
+		maxTokens:       maxTokensOr(cfg.MaxTokens),
+		disableThinking: cfg.DisableThinking,
+		extra:           extra,
 	}, nil
 }
 
@@ -162,6 +182,7 @@ func (c *OpenAIClient) ChatTools(
 		Temperature: openai.Float(0),
 		MaxTokens:   openai.Int(c.maxTokens),
 	}
+	opts := applyDisableThinking(c.disableThinking, &params)
 	if len(tools) > 0 && choice != ToolNone {
 		for _, tool := range tools {
 			params.Tools = append(params.Tools, openai.ChatCompletionFunctionTool(shared.FunctionDefinitionParam{
@@ -173,7 +194,7 @@ func (c *OpenAIClient) ChatTools(
 		params.ToolChoice = openai.ChatCompletionToolChoiceOptionUnionParam{OfAuto: openai.String(string(choice))}
 	}
 
-	resp, err := c.client.Chat.Completions.New(ctx, params, c.extra...)
+	resp, err := c.client.Chat.Completions.New(ctx, params, append(opts, c.extra...)...)
 	if err != nil {
 		return ChatResult{}, fmt.Errorf("llm: chat tools: %w", err)
 	}
@@ -211,7 +232,8 @@ func (c *OpenAIClient) chat(ctx context.Context, system, user string, jsonMode b
 			OfJSONObject: &shared.ResponseFormatJSONObjectParam{},
 		}
 	}
-	resp, err := c.client.Chat.Completions.New(ctx, params, c.extra...)
+	opts := applyDisableThinking(c.disableThinking, &params)
+	resp, err := c.client.Chat.Completions.New(ctx, params, append(opts, c.extra...)...)
 	if err != nil {
 		return "", fmt.Errorf("llm: chat: %w", err)
 	}

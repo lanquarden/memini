@@ -166,8 +166,14 @@ type Config struct {
 	// Qwen-style ones ({"enable_thinking":false}). Keys set here override
 	// nothing: fields the client sets explicitly (model, messages,
 	// temperature, max_tokens) win.
-	ExtraBody  map[string]json.RawMessage
-	HTTPClient *http.Client
+	ExtraBody map[string]json.RawMessage
+	// DisableThinking selects how to suppress a reasoning model's thinking
+	// pass. The right value is gateway- and model-specific: pick the one your
+	// endpoint honors (see the DisableThinking constants). The zero value
+	// (DisableThinkingOff) sends no toggle. Affects every chat call: see
+	// [DisableThinking] for which backend honors which strategy.
+	DisableThinking DisableThinking
+	HTTPClient      *http.Client
 }
 
 // OpenAIConfig and AnthropicConfig are aliases kept for call-site clarity.
@@ -445,6 +451,52 @@ func decodeFacts(content string) ([]Fact, error) {
 	}
 	return kept, nil
 }
+
+// DisableThinking selects how a chat backend should suppress a reasoning
+// model's thinking/chain-of-thought pass. Reasoning models can spend their
+// token budget on hidden chain-of-thought and return empty content for the
+// short, structured tasks memini makes (consolidation decisions, distill
+// facts, ordinal rerank lists, one-line answers); the right toggle trades
+// that latency and token cost for the cheap direct answer.
+//
+// The right value is gateway- and model-specific, because the two major knob
+// shapes are not interchangeable:
+//
+//   - reasoning_effort="none": the OpenAI-native knob. Stock OpenAI and
+//     OpenAI-compatible gateways that pass it through honor it. Some
+//     compatible gateways reject "none" outright (e.g. opencode Zen serving
+//     deepseek-v4-flash) — for those use [DisableThinkingThinking].
+//
+//   - thinking:{type:"disabled"}: the Anthropic-native knob. Honored by real
+//     Anthropic and by gateways that route the thinking field even on an
+//     OpenAI-style body (e.g. opencode Zen serving deepseek-v4-flash, where it
+//     cuts a rerank call ~2x in latency and ~3x in tokens). Stock OpenAI
+//     rejects the unknown field.
+//
+// The OpenAI backend applies both: reasoning_effort via the SDK params, and
+// thinking as a top-level body field via option.WithJSONSet. The Anthropic
+// backend only honors [DisableThinkingThinking] (it has no reasoning_effort
+// field); [DisableThinkingReasoningEffort] is a boot error there.
+//
+// Set via [Config].DisableThinking, surfaced as MEMINI_LLM_DISABLE_THINKING.
+type DisableThinking string
+
+const (
+	// DisableThinkingOff (the default) sends no toggle; the model reasons per
+	// its server default. Has no effect on a non-reasoning model.
+	DisableThinkingOff DisableThinking = ""
+	// DisableThinkingReasoningEffort sets OpenAI reasoning_effort="none" on the
+	// OpenAI backend. The canonical choice for OpenAI reasoning models (gpt-5,
+	// o-series). A no-op (and a boot error on MEMINI_LLM_API=anthropic).
+	DisableThinkingReasoningEffort DisableThinking = "reasoning_effort"
+	// DisableThinkingThinking sends a disabled thinking config. On the Anthropic
+	// backend it sets Thinking to disabled; on the OpenAI backend it injects a
+	// top-level "thinking":{"type":"disabled"} body field (the SDK body override).
+	// The universal choice for Anthropic-compatible gateways and for
+	// OpenAI-compatible gateways that only honor the thinking field (opencode Zen
+	// serving deepseek-v4-flash). Only set it on a gateway known to accept it.
+	DisableThinkingThinking DisableThinking = "thinking"
+)
 
 // maxTokensOr applies the default budget when unset.
 func maxTokensOr(n int) int64 {

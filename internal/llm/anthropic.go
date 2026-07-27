@@ -17,10 +17,11 @@ import (
 // marked for prompt caching, so repeated consolidation calls reuse it at the
 // cache-read rate.
 type AnthropicClient struct {
-	client    anthropic.Client
-	extra     []option.RequestOption
-	model     string
-	maxTokens int64
+	client          anthropic.Client
+	model           string
+	maxTokens       int64
+	disableThinking DisableThinking
+	extra           []option.RequestOption
 }
 
 // NewAnthropic builds an Anthropic Messages client. Model is required; BaseURL
@@ -44,10 +45,11 @@ func NewAnthropic(cfg Config) (*AnthropicClient, error) {
 		extra = append(extra, option.WithJSONSet(key, raw))
 	}
 	return &AnthropicClient{
-		client:    anthropic.NewClient(opts...),
-		extra:     extra,
-		model:     cfg.Model,
-		maxTokens: maxTokensOr(cfg.MaxTokens),
+		client:          anthropic.NewClient(opts...),
+		model:           cfg.Model,
+		maxTokens:       maxTokensOr(cfg.MaxTokens),
+		disableThinking: cfg.DisableThinking,
+		extra:           extra,
 	}, nil
 }
 
@@ -169,6 +171,10 @@ func (c *AnthropicClient) ChatTools(
 		}},
 		Messages: messages,
 	}
+	if c.disableThinking == DisableThinkingThinking {
+		disabled := anthropic.NewThinkingConfigDisabledParam()
+		params.Thinking = anthropic.ThinkingConfigParamUnion{OfDisabled: &disabled}
+	}
 	if len(tools) > 0 && choice != ToolNone {
 		for _, tool := range tools {
 			props, required := schemaProps(tool.Schema)
@@ -211,7 +217,7 @@ func (c *AnthropicClient) ChatTools(
 // concatenates the text blocks of the reply (skipping reasoning blocks, which
 // some models — e.g. MiniMax M2 — always emit).
 func (c *AnthropicClient) chat(ctx context.Context, system, user string) (string, error) {
-	msg, err := c.client.Messages.New(ctx, anthropic.MessageNewParams{
+	params := anthropic.MessageNewParams{
 		Model:       c.model,
 		MaxTokens:   c.maxTokens,
 		Temperature: anthropic.Float(0),
@@ -222,7 +228,12 @@ func (c *AnthropicClient) chat(ctx context.Context, system, user string) (string
 		Messages: []anthropic.MessageParam{
 			anthropic.NewUserMessage(anthropic.NewTextBlock(user)),
 		},
-	}, c.extra...)
+	}
+	if c.disableThinking == DisableThinkingThinking {
+		disabled := anthropic.NewThinkingConfigDisabledParam()
+		params.Thinking = anthropic.ThinkingConfigParamUnion{OfDisabled: &disabled}
+	}
+	msg, err := c.client.Messages.New(ctx, params, c.extra...)
 	if err != nil {
 		return "", fmt.Errorf("llm: anthropic: %w", err)
 	}

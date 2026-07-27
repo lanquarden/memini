@@ -384,3 +384,82 @@ func TestAnthropicSendsOpenCodeSessionHeader(t *testing.T) {
 		})
 	}
 }
+
+// captureAnthropicBody spins a /v1/messages echo server that records the JSON
+// request body, runs fn against a client built from cfg, and returns the body.
+func captureAnthropicBody(t *testing.T, cfg llm.Config, fn func(c *llm.AnthropicClient)) map[string]any {
+	t.Helper()
+	var gotBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(raw, &gotBody)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(strings.Replace(anthropicReply, "%s", `"ok"`, 1)))
+	}))
+	defer srv.Close()
+
+	cfg.BaseURL = srv.URL
+	if cfg.Model == "" {
+		cfg.Model = "m"
+	}
+	c, err := llm.NewAnthropic(cfg)
+	if err != nil {
+		t.Fatalf("NewAnthropic: %v", err)
+	}
+	fn(c)
+	if gotBody == nil {
+		t.Fatal("no request body captured")
+	}
+	return gotBody
+}
+
+func TestAnthropicDisableThinkingSendsDisabledConfig(t *testing.T) {
+	body := captureAnthropicBody(t, llm.Config{DisableThinking: llm.DisableThinkingThinking}, func(c *llm.AnthropicClient) {
+		if _, err := c.Complete(context.Background(), "sys", "user"); err != nil {
+			t.Fatalf("Complete: %v", err)
+		}
+	})
+	thinking, _ := body["thinking"].(map[string]any)
+	if thinking == nil || thinking["type"] != "disabled" {
+		t.Errorf("thinking = %v, want {type:disabled}", body["thinking"])
+	}
+}
+
+func TestAnthropicDefaultOmitsThinking(t *testing.T) {
+	body := captureAnthropicBody(t, llm.Config{}, func(c *llm.AnthropicClient) {
+		if _, err := c.Complete(context.Background(), "sys", "user"); err != nil {
+			t.Fatalf("Complete: %v", err)
+		}
+	})
+	if _, ok := body["thinking"]; ok {
+		t.Errorf("thinking = %v, want absent for a default client", body["thinking"])
+	}
+}
+
+func TestAnthropicChatToolsDisableThinkingSendsDisabledConfig(t *testing.T) {
+	body := captureAnthropicBody(t, llm.Config{DisableThinking: llm.DisableThinkingThinking}, func(c *llm.AnthropicClient) {
+		if _, err := c.ChatTools(context.Background(), "sys",
+			[]llm.ChatTurn{{Role: llm.RoleUser, Text: "go"}}, nil, llm.ToolAuto); err != nil {
+			t.Fatalf("ChatTools: %v", err)
+		}
+	})
+	thinking, _ := body["thinking"].(map[string]any)
+	if thinking == nil || thinking["type"] != "disabled" {
+		t.Errorf("thinking = %v, want {type:disabled}", body["thinking"])
+	}
+}
+
+// TestAnthropicReasoningEffortIsNoOp pins that the Anthropic backend has no
+// reasoning_effort field: that strategy sends no thinking toggle (config's
+// validateLLM rejects the combination at boot, but the client itself must not
+// misbehave if handed it directly — it must simply do nothing).
+func TestAnthropicReasoningEffortIsNoOp(t *testing.T) {
+	body := captureAnthropicBody(t, llm.Config{DisableThinking: llm.DisableThinkingReasoningEffort}, func(c *llm.AnthropicClient) {
+		if _, err := c.Complete(context.Background(), "sys", "user"); err != nil {
+			t.Fatalf("Complete: %v", err)
+		}
+	})
+	if _, ok := body["thinking"]; ok {
+		t.Errorf("thinking = %v, want absent: anthropic has no reasoning_effort field", body["thinking"])
+	}
+}

@@ -526,6 +526,7 @@ var meminiEnvKeys = []string{
 	"MEMINI_EMBED_QUERY_PREFIX",
 	"MEMINI_WRITE_DEDUP_SCORE", "MEMINI_WRITE_DEDUP_ACTION",
 	"MEMINI_LLM_BASE_URL", "MEMINI_LLM_API_KEY", "MEMINI_LLM_MODEL", "MEMINI_LLM_OPENCODE_SESSION",
+	"MEMINI_LLM_DISABLE_THINKING",
 	"MEMINI_RERANK", "MEMINI_RERANK_MODEL", "MEMINI_RERANK_API_KEY",
 	"MEMINI_RERANK_TIMEOUT", "MEMINI_RERANK_MAX_BATCH_CHARS", "MEMINI_RERANK_PROMPT",
 	"MEMINI_EMBED_MAX_ITEM_CHARS", "MEMINI_RERANK_MAX_DOC_CHARS", "MEMINI_RERANK_LLM_MAX_DOC_CHARS",
@@ -667,6 +668,60 @@ func TestChunkDefaultsAreCoherent(t *testing.T) {
 	// switched on.
 	if cfg.ChunkScoreWeight != 1 {
 		t.Errorf("MEMINI_CHUNK_SCORE_WEIGHT default = %v, want 1", cfg.ChunkScoreWeight)
+	}
+	if cfg.LLMDisableThinking != "" {
+		t.Errorf("MEMINI_LLM_DISABLE_THINKING defaults to %q; it must be opt-in (empty)", cfg.LLMDisableThinking)
+	}
+}
+
+func TestLLMDisableThinkingEnv(t *testing.T) {
+	for _, tc := range []struct {
+		env  string
+		want string
+	}{
+		{"", ""},
+		{"off", "off"},
+		{"reasoning_effort", "reasoning_effort"},
+		{"thinking", "thinking"},
+	} {
+		t.Run(tc.env, func(t *testing.T) {
+			clearMeminiEnv(t)
+			if tc.env != "" {
+				t.Setenv("MEMINI_LLM_DISABLE_THINKING", tc.env)
+			}
+			cfg, err := config.Load()
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			if cfg.LLMDisableThinking != tc.want {
+				t.Errorf("LLMDisableThinking = %q, want %q", cfg.LLMDisableThinking, tc.want)
+			}
+		})
+	}
+}
+
+func TestLLMDisableThinkingRejectsUnknownValue(t *testing.T) {
+	clearMeminiEnv(t)
+	t.Setenv("MEMINI_LLM_DISABLE_THINKING", "bogus")
+	_, err := config.Load()
+	if err == nil {
+		t.Fatal("expected an error for an unknown strategy, got nil")
+	}
+	if !strings.Contains(err.Error(), "MEMINI_LLM_DISABLE_THINKING") {
+		t.Errorf("error should name the var, got %v", err)
+	}
+}
+
+func TestLLMDisableThinkingRejectsReasoningEffortOnAnthropic(t *testing.T) {
+	clearMeminiEnv(t)
+	t.Setenv("MEMINI_LLM_DISABLE_THINKING", "reasoning_effort")
+	t.Setenv("MEMINI_LLM_API", "anthropic")
+	_, err := config.Load()
+	if err == nil {
+		t.Fatal("expected reasoning_effort+anthropic to be rejected, got nil")
+	}
+	if !strings.Contains(err.Error(), "anthropic") {
+		t.Errorf("error should explain the anthropic incompatibility, got %v", err)
 	}
 }
 

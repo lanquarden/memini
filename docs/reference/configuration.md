@@ -61,6 +61,7 @@ server deployment. Treat the rest as tuning you reach for when you have a reason
 | [`MEMINI_LLM_MODEL`](#memini_llm_model) | `gpt-4o-mini` | [LLM (optional)](#llm-optional) |
 | [`MEMINI_LLM_API`](#memini_llm_api) | `openai` | [LLM (optional)](#llm-optional) |
 | [`MEMINI_LLM_OPENCODE_SESSION`](#memini_llm_opencode_session) | `memini` | [LLM (optional)](#llm-optional) |
+| [`MEMINI_LLM_DISABLE_THINKING`](#memini_llm_disable_thinking) | none | [LLM (optional)](#llm-optional) |
 | [`MEMINI_LLM_MAX_TOKENS`](#memini_llm_max_tokens) | `0` | [LLM (optional)](#llm-optional) |
 | [`MEMINI_LLM_EXTRA_BODY`](#memini_llm_extra_body) | none | [LLM (optional)](#llm-optional) |
 | [`MEMINI_RERANK`](#memini_rerank) | `off` | [Reranking](#reranking) |
@@ -358,6 +359,12 @@ string, default `openai`. Set by `Config.LLMAPI`.
 string, default `memini`. Set by `Config.LLMOpenCodeSession`.
 
 `MEMINI_LLM_OPENCODE_SESSION` is sent as the x-opencode-session header on every LLM request. OpenCode Go uses it to optimize prompt caching. Keep it stable; use a deployment-specific value when multiple memini instances share one OpenCode account.
+
+### `MEMINI_LLM_DISABLE_THINKING`
+
+string, default none. Set by `Config.LLMDisableThinking`.
+
+`MEMINI_LLM_DISABLE_THINKING` selects how to suppress a reasoning model's thinking pass. The right value is gateway/model-specific: "reasoning_effort" sets OpenAI reasoning_effort="none" (gpt-5/o-series); "thinking" sends a disabled thinking config (Anthropic and compatible gateways, and OpenAI- compatible gateways that only honor the thinking field, e.g. opencode Zen serving deepseek-v4-flash). Empty/"off" sends no toggle. It applies to every chat call: consolidation, distillation, answering, the memory_answer MCP tool, and LLM reranking. "reasoning_effort" is rejected at boot when MEMINI_LLM_API=anthropic (that backend has no equivalent field). Useful for a reasoning model whose chain-of-thought latency or token cost is not worth it for short structured tasks; a no-op on a non-reasoning model. See internal/llm DisableThinking strategies.
 
 ### `MEMINI_LLM_MAX_TOKENS`
 
