@@ -331,6 +331,11 @@ type Config struct {
 	LLMModel string `env:"MEMINI_LLM_MODEL" envDefault:"gpt-4o-mini"`
 	// LLMAPI selects the chat backend: "openai" (default) or "anthropic".
 	LLMAPI string `env:"MEMINI_LLM_API" envDefault:"openai"`
+	// LLMOpenCodeSession is sent as the x-opencode-session header on every LLM
+	// request. OpenCode Go uses it to optimize prompt caching. Keep it stable;
+	// use a deployment-specific value when multiple memini instances share one
+	// OpenCode account.
+	LLMOpenCodeSession string `env:"MEMINI_LLM_OPENCODE_SESSION" envDefault:"memini"`
 	// LLMMaxTokens caps the completion length of every chat call. 0 (the
 	// default) keeps the client's built-in budget (4096). Reasoning models
 	// that spend thousands of hidden thinking tokens inside the budget need

@@ -340,3 +340,38 @@ func TestOpenAIExtraBodyMergedIntoRequest(t *testing.T) {
 		t.Fatalf("client-set field lost: model=%v", got["model"])
 	}
 }
+
+func TestOpenAISendsOpenCodeSessionHeader(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  llm.Config
+		want string
+	}{
+		{name: "default", cfg: llm.Config{}, want: "memini"},
+		{name: "configured", cfg: llm.Config{OpenCodeSession: "memini-prod"}, want: "memini-prod"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got string
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				got = r.Header.Get("x-opencode-session")
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"ok"}}]}`))
+			}))
+			defer srv.Close()
+
+			tt.cfg.BaseURL = srv.URL
+			tt.cfg.Model = "m"
+			c, err := llm.NewOpenAI(tt.cfg)
+			if err != nil {
+				t.Fatalf("NewOpenAI: %v", err)
+			}
+			if _, err := c.Complete(context.Background(), "sys", "user"); err != nil {
+				t.Fatalf("Complete: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("x-opencode-session = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

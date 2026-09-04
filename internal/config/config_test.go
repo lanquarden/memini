@@ -119,6 +119,9 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.LLMEnabled() {
 		t.Error("LLMEnabled() = true, want false with no base URL")
 	}
+	if cfg.LLMOpenCodeSession != "memini" {
+		t.Errorf("LLMOpenCodeSession = %q, want memini", cfg.LLMOpenCodeSession)
+	}
 	if !cfg.UIEnabled {
 		t.Error("UIEnabled = false, want true")
 	}
@@ -172,6 +175,7 @@ func TestLoadOverrides(t *testing.T) {
 	t.Setenv("MEMINI_WRITE_DEDUP_ACTION", "coalesce")
 	t.Setenv("MEMINI_SWEEP_INTERVAL", "5m")
 	t.Setenv("MEMINI_LLM_BASE_URL", "http://localhost:8000/v1")
+	t.Setenv("MEMINI_LLM_OPENCODE_SESSION", "memini-prod")
 	t.Setenv("MEMINI_DEFAULT_NAMESPACE", "team-a")
 
 	cfg, err := config.Load()
@@ -207,6 +211,9 @@ func TestLoadOverrides(t *testing.T) {
 	}
 	if !cfg.LLMEnabled() {
 		t.Error("LLMEnabled() = false, want true")
+	}
+	if cfg.LLMOpenCodeSession != "memini-prod" {
+		t.Errorf("LLMOpenCodeSession = %q, want memini-prod", cfg.LLMOpenCodeSession)
 	}
 }
 
@@ -511,7 +518,7 @@ var meminiEnvKeys = []string{
 	"MEMINI_EMBED_BASE_URL", "MEMINI_EMBED_API_KEY", "MEMINI_EMBED_MODEL", "MEMINI_EMBED_MODEL_ALIASES", "MEMINI_EMBED_DIMS",
 	"MEMINI_EMBED_QUERY_PREFIX",
 	"MEMINI_WRITE_DEDUP_SCORE", "MEMINI_WRITE_DEDUP_ACTION",
-	"MEMINI_LLM_BASE_URL", "MEMINI_LLM_API_KEY", "MEMINI_LLM_MODEL",
+	"MEMINI_LLM_BASE_URL", "MEMINI_LLM_API_KEY", "MEMINI_LLM_MODEL", "MEMINI_LLM_OPENCODE_SESSION",
 	"MEMINI_RERANK", "MEMINI_RERANK_MODEL", "MEMINI_RERANK_API_KEY",
 	"MEMINI_RERANK_TIMEOUT", "MEMINI_RERANK_MAX_BATCH_CHARS",
 	"MEMINI_EMBED_MAX_ITEM_CHARS", "MEMINI_RERANK_MAX_DOC_CHARS", "MEMINI_RERANK_LLM_MAX_DOC_CHARS",

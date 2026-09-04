@@ -34,6 +34,7 @@ func NewOpenAI(cfg Config) (*OpenAIClient, error) {
 		option.WithAPIKey(apiKeyOr(cfg.APIKey)),
 		option.WithMaxRetries(maxRetries),
 		option.WithHTTPClient(httpClientOr(cfg.HTTPClient)),
+		option.WithHeader("x-opencode-session", openCodeSessionOr(cfg.OpenCodeSession)),
 	}
 	var extra []option.RequestOption
 	for key, raw := range cfg.ExtraBody {

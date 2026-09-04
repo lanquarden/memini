@@ -34,6 +34,7 @@ func NewAnthropic(cfg Config) (*AnthropicClient, error) {
 		option.WithAPIKey(apiKeyOr(cfg.APIKey)),
 		option.WithMaxRetries(maxRetries),
 		option.WithHTTPClient(httpClientOr(cfg.HTTPClient)),
+		option.WithHeader("x-opencode-session", openCodeSessionOr(cfg.OpenCodeSession)),
 	}
 	if cfg.BaseURL != "" {
 		opts = append(opts, option.WithBaseURL(strings.TrimRight(cfg.BaseURL, "/")))
