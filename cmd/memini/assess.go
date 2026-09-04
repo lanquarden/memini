@@ -103,11 +103,12 @@ func runAssess(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	client, err := llm.New(llm.API(cfg.LLMAPI), llm.Config{
-		BaseURL:   cfg.LLMBaseURL,
-		APIKey:    cfg.LLMAPIKey,
-		Model:     cfg.LLMModel,
-		MaxTokens: cfg.LLMMaxTokens,
-		ExtraBody: extraBody,
+		BaseURL:         cfg.LLMBaseURL,
+		APIKey:          cfg.LLMAPIKey,
+		Model:           cfg.LLMModel,
+		OpenCodeSession: cfg.LLMOpenCodeSession,
+		MaxTokens:       cfg.LLMMaxTokens,
+		ExtraBody:       extraBody,
 	})
 	if err != nil {
 		return err

@@ -151,6 +151,10 @@ type Config struct {
 	BaseURL string // OpenAI: e.g. https://host/v1 ; Anthropic: e.g. https://api.minimax.io/anthropic
 	APIKey  string
 	Model   string
+	// OpenCodeSession is sent as x-opencode-session on every request. OpenCode
+	// Go uses it to optimize prompt caching. Empty uses "memini", which is
+	// stable across calls and process restarts.
+	OpenCodeSession string
 	// MaxTokens caps the completion length (defaults to defaultMaxTokens). A
 	// budget is required for reasoning models, which otherwise spend the server
 	// default on hidden reasoning and return empty content.
@@ -184,6 +188,10 @@ const (
 
 // maxRetries bounds SDK retries on rate-limit (429) and 5xx responses.
 const maxRetries = 6
+
+// defaultOpenCodeSession gives callers that construct Config directly the same
+// compliant default as MEMINI_LLM_OPENCODE_SESSION.
+const defaultOpenCodeSession = "memini"
 
 // defaultHTTPTimeout bounds a single LLM HTTP attempt so a hung provider socket
 // cannot park a goroutine indefinitely. Each SDK retry gets a fresh attempt
@@ -453,4 +461,11 @@ func apiKeyOr(k string) string {
 		return "noauth"
 	}
 	return k
+}
+
+func openCodeSessionOr(session string) string {
+	if session == "" {
+		return defaultOpenCodeSession
+	}
+	return session
 }

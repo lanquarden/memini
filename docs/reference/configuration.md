@@ -60,6 +60,7 @@ server deployment. Treat the rest as tuning you reach for when you have a reason
 | [`MEMINI_LLM_API_KEY`](#memini_llm_api_key) | none | [LLM (optional)](#llm-optional) |
 | [`MEMINI_LLM_MODEL`](#memini_llm_model) | `gpt-4o-mini` | [LLM (optional)](#llm-optional) |
 | [`MEMINI_LLM_API`](#memini_llm_api) | `openai` | [LLM (optional)](#llm-optional) |
+| [`MEMINI_LLM_OPENCODE_SESSION`](#memini_llm_opencode_session) | `memini` | [LLM (optional)](#llm-optional) |
 | [`MEMINI_LLM_MAX_TOKENS`](#memini_llm_max_tokens) | `0` | [LLM (optional)](#llm-optional) |
 | [`MEMINI_LLM_EXTRA_BODY`](#memini_llm_extra_body) | none | [LLM (optional)](#llm-optional) |
 | [`MEMINI_RERANK`](#memini_rerank) | `off` | [Reranking](#reranking) |
@@ -351,6 +352,12 @@ string, default `gpt-4o-mini`. Set by `Config.LLMModel`.
 string, default `openai`. Set by `Config.LLMAPI`.
 
 `MEMINI_LLM_API` selects the chat backend: "openai" (default) or "anthropic".
+
+### `MEMINI_LLM_OPENCODE_SESSION`
+
+string, default `memini`. Set by `Config.LLMOpenCodeSession`.
+
+`MEMINI_LLM_OPENCODE_SESSION` is sent as the x-opencode-session header on every LLM request. OpenCode Go uses it to optimize prompt caching. Keep it stable; use a deployment-specific value when multiple memini instances share one OpenCode account.
 
 ### `MEMINI_LLM_MAX_TOKENS`
 

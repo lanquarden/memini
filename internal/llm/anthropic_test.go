@@ -349,3 +349,38 @@ func TestAnthropicChatToolsRejectsReasoningOnlyReply(t *testing.T) {
 		t.Errorf("error should mention the empty response, got %v", err)
 	}
 }
+
+func TestAnthropicSendsOpenCodeSessionHeader(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  llm.Config
+		want string
+	}{
+		{name: "default", cfg: llm.Config{}, want: "memini"},
+		{name: "configured", cfg: llm.Config{OpenCodeSession: "memini-prod"}, want: "memini-prod"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got string
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				got = r.Header.Get("x-opencode-session")
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(strings.Replace(anthropicReply, "%s", `"ok"`, 1)))
+			}))
+			defer srv.Close()
+
+			tt.cfg.BaseURL = srv.URL
+			tt.cfg.Model = "m"
+			c, err := llm.NewAnthropic(tt.cfg)
+			if err != nil {
+				t.Fatalf("NewAnthropic: %v", err)
+			}
+			if _, err := c.Complete(context.Background(), "sys", "user"); err != nil {
+				t.Fatalf("Complete: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("x-opencode-session = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

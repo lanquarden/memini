@@ -288,7 +288,9 @@ func buildServiceStack(
 		}
 		client, err := llm.New(llm.API(cfg.LLMAPI), llm.Config{
 			BaseURL: cfg.LLMBaseURL, APIKey: cfg.LLMAPIKey, Model: cfg.LLMModel,
-			MaxTokens: cfg.LLMMaxTokens, ExtraBody: extraBody,
+			OpenCodeSession: cfg.LLMOpenCodeSession,
+			MaxTokens:       cfg.LLMMaxTokens,
+			ExtraBody:       extraBody,
 		})
 		if err != nil {
 			_ = st.Close()
